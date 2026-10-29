@@ -1,8 +1,16 @@
 import argparse
+import sys
 from pathlib import Path
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from src.env import resolve_paths,find_image_root
+
+# When this file is run as ``python scripts/prepare_splits.py``, Python puts
+# ``scripts/`` (rather than the repository root) on sys.path.
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from src.env import resolve_paths, find_image_root
 from src.dataset import normalize_columns
 
 def main():
