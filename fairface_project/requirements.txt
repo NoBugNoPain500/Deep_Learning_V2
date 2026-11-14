@@ -1,0 +1,7 @@
+# Kaggle supplies CUDA-enabled torch and torchvision with its GPU image.
+# Keep those packages from being replaced by a CPU-only pip wheel.
+datasets>=2.19,<4
+numpy>=1.24,<2.0
+Pillow>=10
+scikit-learn>=1.3
+pandas>=2.0,<3.0

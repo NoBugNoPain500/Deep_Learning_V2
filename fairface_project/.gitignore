@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+fairface_*_cache/
+hf_cache/
+results/
+checkpoints/
+*.pt
+*.npy
