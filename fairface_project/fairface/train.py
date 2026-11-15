@@ -32,10 +32,10 @@ def main():
   print('forward sanity passed',flush=True)
   if world>1: dist.destroy_process_group()
   return
- total=a.epochs or {'m1':12,'m2':12,'m3':12,'m4':14}[a.model]; two=a.model!='m1'; ema=EMA(model) if a.model in ('m3','m4') else None
- best=-1.; best_loss=float('inf'); rows=[]; start_ep=0; ckpt=out/f'{a.model}_last.pt'; bestpath=out/f'{a.model}_best.pt'; resume_state=None
+ total=a.epochs or 15; two=a.model!='m1'; ema=EMA(model) if a.model in ('m3','m4') else None
+ best=float('inf'); best_loss=best; best_acc=0.; rows=[]; start_ep=0; patience_count=0; previous_resolution=None; stop_training=False; ckpt=out/f'{a.model}_last.pt'; bestpath=out/f'{a.model}_best.pt'; resume_state=None
  if ckpt.exists():
-  resume_state=torch.load(ckpt,map_location=f'cuda:{local}',weights_only=False); model.load_state_dict(resume_state['model']); start_ep=resume_state['epoch']+1; best=resume_state['best']; best_loss=resume_state['best_loss']; rows=resume_state['rows'];
+  resume_state=torch.load(ckpt,map_location=f'cuda:{local}',weights_only=False); model.load_state_dict(resume_state['model']); start_ep=resume_state['epoch']+1; best=resume_state.get('best_loss',resume_state.get('best',float('inf'))); best_loss=resume_state.get('best_loss',best); best_acc=resume_state.get('best_accuracy',0.); patience_count=resume_state.get('patience_count',0); previous_resolution=resume_state.get('resolution'); rows=resume_state['rows'];
   if ema and resume_state.get('ema'): ema.model.load_state_dict(resume_state['ema'])
  opt=sched=scaler=None; active_stage=None
  for ep in range(start_ep,total):
@@ -71,7 +71,8 @@ def main():
   module=DDP(model,device_ids=[local],gradient_as_bucket_view=True) if world>1 else model
   module.train()
   if stage1: model.stem.eval(); model.layers.eval()
-  train.set_epoch(ep); tic=time.time(); res=(128 if a.model=='m4' and ep<2 else (176 if a.model=='m4' and ep<6 else 224)); standard=two
+  train.set_epoch(ep); tic=time.time(); res=(128 if a.model=='m4' and ep<7 else (176 if a.model=='m4' and ep<11 else 224)); standard=two
+  if a.model=='m4' and previous_resolution is not None and res != previous_resolution: patience_count=0
   loss_sum=torch.zeros((),device='cuda'); count=torch.zeros((),device='cuda')
   for xb,yb in train:
    x=gpu_prep(xb,res,True,standard); target=yb
@@ -94,11 +95,20 @@ def main():
      logits_all.append(z.float().cpu().numpy()); labels.append(yb.cpu().numpy())
    dz=np.concatenate(logits_all); dy=np.concatenate(labels); pred=dz>=0; acc=float((pred==dy).mean()); dl=float(np.logaddexp(0,dz).mean()-np.mean(dy*dz))
    row={'epoch':ep+1,'train_loss':train_loss,'dev_loss':dl,'dev_accuracy':acc,'seconds':elapsed,'resolution':res}; rows.append(row); print(json.dumps(row),flush=True)
-   state={'model':model.state_dict(),'epoch':ep,'best':best,'best_loss':best_loss,'rows':rows,'ema':ema.model.state_dict() if ema else None,'stage1':stage1 if two else False,'optimizer':opt.state_dict(),'scheduler':sched.state_dict(),'scaler':scaler.state_dict()}; torch.save(state,ckpt)
-   if acc>best or (acc==best and dl<best_loss):
-    best,best_loss=acc,dl; state.update(best=best,best_loss=best_loss); torch.save(state,bestpath)
+   checkpoint_improved=dl < best_loss
+   patience_improved=dl < best_loss-1e-3
+   if checkpoint_improved: best_loss=dl; best=dl; best_acc=acc
+   if patience_improved: patience_count=0
+   elif ep+1>=8: patience_count+=1
+   state={'model':model.state_dict(),'epoch':ep,'best':best,'best_loss':best_loss,'best_accuracy':best_acc,'patience_count':patience_count,'resolution':res,'rows':rows,'ema':ema.model.state_dict() if ema else None,'stage1':stage1 if two else False,'optimizer':opt.state_dict(),'scheduler':sched.state_dict(),'scaler':scaler.state_dict()}; torch.save(state,ckpt)
+   if checkpoint_improved: torch.save(state,bestpath)
+   stop_training=ep+1>=8 and patience_count>=5
+   previous_resolution=res
+  if world>1:
+   flag=torch.tensor([int(stop_training)],device='cuda'); dist.broadcast(flag,src=0); stop_training=bool(flag.item())
   if world>1: dist.barrier()
   if world>1: del module
+  if stop_training: break
  if rank==0:
   state=torch.load(bestpath,map_location=f'cuda:{local}',weights_only=False); model.load_state_dict(state['model']); evaluator=model
   if ema and state.get('ema'): ema.model.load_state_dict(state['ema']); evaluator=ema.model

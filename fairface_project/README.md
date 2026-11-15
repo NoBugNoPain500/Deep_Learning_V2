@@ -21,9 +21,11 @@ The Kaggle notebooks in `notebooks/` clone this GitHub repository at the selecte
 
 ## Models
 
-- M1: ImageNet V1 ResNet50, linear binary head, basic augmentation, 12 epochs.
+- M1: ImageNet V1 ResNet50, linear binary head, basic augmentation, up to 15 epochs.
 - M2: M1 with two-stage frozen-head/full fine-tuning, discriminative layer learning rates, stronger augmentation, label smoothing.
 - M3: M2 with CBAM stage gates, GeM, MLP head, EMA.
 - M4: M3 with ImageNet V2 weights, progressive 128/176/224 resizing, mixup, and horizontal-flip test-time augmentation.
+
+All models use a maximum of 15 epochs and early stopping on dev loss (`patience=5`, `min_delta=1e-3`, starting at epoch 8). The best checkpoint is selected by minimum dev loss. M2–M4 use 2 head-only epochs followed by 13 fine-tuning epochs; M4's fine-tuning resolution schedule is 5 epochs at 128, 4 at 176, and 4 at 224 pixels.
 
 Each run writes `{model}_best.pt`, `{model}_last.pt`, `{model}_log.csv`, `{model}_metrics.json`, `{model}_test_logits.npy`, and test labels to the output directory. `last.pt` supports restart at an epoch boundary. Checkpoints and result files should be downloaded from Kaggle's output panel before the session ends.

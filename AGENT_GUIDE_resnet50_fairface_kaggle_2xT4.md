@@ -224,14 +224,14 @@ Với margin 1.25 mặt nằm nhỏ giữa khung; **đừng crop quá mạnh**: 
 
 ## 6. Bốn model (ladder cộng dồn)
 
-Chung: `BCEWithLogits` trên **1 logit** (output shape `(B,)`), threshold 0.5, cosine per-step, warmup 1 epoch ở stage 2, chọn best theo **dev accuracy** (tie → dev loss thấp hơn). Hyperparameter dưới đây ứng với **global bs 256**.
+Chung: `BCEWithLogits` trên **1 logit** (output shape `(B,)`), threshold 0.5, cosine per-step, warmup 1 epoch ở stage 2. Mỗi model có ngân sách tối đa **15 epoch**; early stopping theo **dev loss**, `patience=5`, `min_delta=1e-3`, bắt đầu đếm từ epoch 8. Với M4, reset bộ đếm khi đổi độ phân giải. Chọn checkpoint có dev loss thấp nhất và báo cáo accuracy tại checkpoint đó. Hyperparameter dưới đây ứng với **global bs 256**.
 
 | | **M1 Baseline** | **M2 + Recipe** | **M3 + Architecture** | **M4 + Efficiency & Data tricks** |
 |---|---|---|---|---|
 | Pretrained | torchvision `IMAGENET1K_V1` | V1 | V1 | **`IMAGENET1K_V2`** |
 | Kiến trúc | ResNet50 + `fc→Linear(2048,1)` | = M1 | + CBAM gate mỗi stage + GeM + MLP head | = M3 |
 | Huấn luyện | full fine-tune 1 giai đoạn | **2 giai đoạn** + **discriminative LR** | = M2 | = M2 |
-| Epoch | 12 | 2 + 10 | 2 + 10 | 2 + 12 (progressive) |
+| Epoch | 15 | 2 + 13 | 2 + 13 | 2 + 13 (progressive) |
 | Optimizer | AdamW lr 2e-4, wd 0.01 | AdamW base 4e-4 (mults), wd 0.02 | = M2 | = M2 |
 | Aug | `AUG_BASIC` | `AUG_STD` | `AUG_STD` | `AUG_STD` + mixup |
 | Label smoothing | 0 | 0.05 | 0.05 | 0.05 |
@@ -310,7 +310,9 @@ class EMA:
 ```
 Mỗi rank giữ 1 EMA riêng; vì params đã đồng bộ nên EMA các rank giống nhau. Bắt đầu update từ đầu stage 2. Eval/best/test dùng EMA.
 
-**Progressive resizing (M4):** stage 2 (12 epoch) = 4 epoch @128, 4 @176, 4 @224 (đổi `out_size` trong `gpu_prep`; cache vẫn 224). Dev/test luôn eval ở 224.
+**Progressive resizing (M4):** 2 epoch head-only @128, sau đó stage 2 (13 epoch) = 5 epoch @128, 4 @176, 4 @224 (đổi `out_size` trong `gpu_prep`; cache vẫn 224). Dev/test luôn eval ở 224. Reset bộ đếm early stopping tại mỗi lần đổi độ phân giải.
+
+**Early stopping và báo cáo:** monitor dev loss, `patience=5`, `min_delta=1e-3`, chỉ bắt đầu đếm từ epoch 8. Dừng khi không giảm dev loss đủ `min_delta` trong 5 epoch liên tiếp; checkpoint tốt nhất là checkpoint có dev loss thấp nhất. Chạy seed 42, 43, 44 cho mỗi model và báo cáo mean ± std. Vẽ train/dev loss theo epoch, ghi best epoch và epoch dừng thực tế. Nếu best epoch của model bất kỳ từ epoch 14 trở đi, tăng ngân sách lên 20 cho cả bốn model và chạy lại. Dùng `test_logits.npy` để thực hiện McNemar test cho so sánh các model liền kề.
 
 **Mixup (M4):** mỗi batch với prob 0.5: `lam~Beta(0.2,0.2)` (sinh ở rank, khác nhau giữa rank cũng được), `x = lam*x + (1-lam)*x[perm]`, target mềm tương ứng. Không tính train-acc ở batch mixup. Tắt 3 epoch cuối.
 
