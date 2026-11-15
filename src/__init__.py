@@ -1,1 +1,0 @@
-"""FairFace gender classification project."""

@@ -18,7 +18,7 @@ class GeM(nn.Module):
     def forward(self,x): return x.float().clamp(min=self.eps).pow(self.p).mean((2,3)).pow(1/self.p)
 class ResNet50Gender(nn.Module):
     def __init__(self,model_id="m1"):
-        super().__init__(); advanced=model_id in ("m3","m4"); weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V2 if model_id=="m4" else torchvision.models.ResNet50_Weights.IMAGENET1K_V1
+        super().__init__(); advanced=model_id in ("m3","m4"); weights=None if model_id=="m0" else (torchvision.models.ResNet50_Weights.IMAGENET1K_V2 if model_id=="m4" else torchvision.models.ResNet50_Weights.IMAGENET1K_V1)
         b=torchvision.models.resnet50(weights=weights)
         self.stem=nn.Sequential(b.conv1,b.bn1,b.relu,b.maxpool); self.layers=nn.ModuleList([b.layer1,b.layer2,b.layer3,b.layer4])
         self.gates=nn.ModuleList([CBAMGate(c) for c in (256,512,1024,2048)]) if advanced else None

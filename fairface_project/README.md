@@ -17,10 +17,11 @@ NCCL_IB_DISABLE=1 OMP_NUM_THREADS=2 torchrun --standalone --nproc_per_node=2 -m 
   --out /kaggle/working/results --bs 128
 ```
 
-The Kaggle notebooks in `notebooks/` clone this GitHub repository at the selected branch, install `requirements.txt`, and run M1–M2 or M3–M4 from data download through training and result reporting. Set the Kaggle accelerator to **GPU T4 x2** and enable Internet. Do not attach a Kaggle Input dataset. The notebook config cell contains the repository URL and branch and can be changed if you fork this repository.
+The Kaggle notebooks in `notebooks/` clone this GitHub repository at the selected branch, install `requirements.txt`, and run M0 from scratch, M1–M2, or M3–M4 from data download through training and result reporting. Set the Kaggle accelerator to **GPU T4 x2** and enable Internet. Do not attach a Kaggle Input dataset. The notebook config cell contains the repository URL and branch and can be changed if you fork this repository.
 
 ## Models
 
+- M0: ResNet50 with random initialization and no pretrained weights, trained end to end as a from-scratch baseline.
 - M1: ImageNet V1 ResNet50, linear binary head, basic augmentation, up to 15 epochs.
 - M2: M1 with two-stage frozen-head/full fine-tuning, discriminative layer learning rates, stronger augmentation, label smoothing.
 - M3: M2 with CBAM stage gates, GeM, MLP head, EMA.

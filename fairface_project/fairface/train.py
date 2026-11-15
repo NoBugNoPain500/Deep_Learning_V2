@@ -9,7 +9,7 @@ from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, confusion_m
 from .models import ResNet50Gender, MemmapLoader, gpu_prep, EMA
 
 def main():
- ap=argparse.ArgumentParser(); ap.add_argument('--model',required=True,choices=['m1','m2','m3','m4']); ap.add_argument('--cache',required=True); ap.add_argument('--out',required=True); ap.add_argument('--epochs',type=int,default=0); ap.add_argument('--bs',type=int,default=96); ap.add_argument('--seed',type=int,default=42); ap.add_argument('--sanity',action='store_true')
+ ap=argparse.ArgumentParser(); ap.add_argument('--model',required=True,choices=['m0','m1','m2','m3','m4']); ap.add_argument('--cache',required=True); ap.add_argument('--out',required=True); ap.add_argument('--epochs',type=int,default=0); ap.add_argument('--bs',type=int,default=96); ap.add_argument('--seed',type=int,default=42); ap.add_argument('--sanity',action='store_true')
  a=ap.parse_args(); rank=int(os.getenv('RANK','0')); world=int(os.getenv('WORLD_SIZE','1')); local=int(os.getenv('LOCAL_RANK','0')); torch.cuda.set_device(local)
  if world>1: dist.init_process_group('nccl',timeout=datetime.timedelta(minutes=30))
  random.seed(a.seed); np.random.seed(a.seed); torch.manual_seed(a.seed); torch.cuda.manual_seed_all(a.seed); torch.backends.cudnn.benchmark=True
@@ -32,7 +32,7 @@ def main():
   print('forward sanity passed',flush=True)
   if world>1: dist.destroy_process_group()
   return
- total=a.epochs or 15; two=a.model!='m1'; ema=EMA(model) if a.model in ('m3','m4') else None
+ total=a.epochs or 15; two=a.model in ('m2','m3','m4'); ema=EMA(model) if a.model in ('m3','m4') else None
  best=float('inf'); best_loss=best; best_acc=0.; rows=[]; start_ep=0; patience_count=0; previous_resolution=None; stop_training=False; ckpt=out/f'{a.model}_last.pt'; bestpath=out/f'{a.model}_best.pt'; resume_state=None
  if ckpt.exists():
   resume_state=torch.load(ckpt,map_location=f'cuda:{local}',weights_only=False); model.load_state_dict(resume_state['model']); start_ep=resume_state['epoch']+1; best=resume_state.get('best_loss',resume_state.get('best',float('inf'))); best_loss=resume_state.get('best_loss',best); best_acc=resume_state.get('best_accuracy',0.); patience_count=resume_state.get('patience_count',0); previous_resolution=resume_state.get('resolution'); rows=resume_state['rows'];
